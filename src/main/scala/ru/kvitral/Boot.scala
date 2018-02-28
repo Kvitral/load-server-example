@@ -3,11 +3,13 @@ package ru.kvitral
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
+import akka.pattern.after
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 
 object Boot extends App {
@@ -33,10 +35,8 @@ object Boot extends App {
         complete("this is quick")
       } ~
       path("slow") {
-        def slowFuture = Future {
-          Thread.sleep(10000)
-          "this is slow"
-        }
+
+        def slowFuture = after(10 second, system.scheduler)(Future.successful("this is slow"))
 
         complete(slowFuture)
       }
