@@ -1,19 +1,26 @@
 package ru.kvitral
 
-import io.circe.generic.JsonCodec
+import akka.actor.ActorSystem
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.Random
 
 object PingPong {
-  def sayPong(ticket: Int)(implicit executionContext: ExecutionContext) = Future {
+  def sayPong(ticket: Int)(implicit system: ActorSystem): Future[Pong] = {
+    implicit val executionContext: ExecutionContext = system.dispatcher
     val rndSleep = Random.nextInt(5)
-    Thread.sleep(rndSleep * 1000)
-    Pong(ticket)
+    val promise = Promise[Pong]
 
+    system.scheduler.scheduleOnce(rndSleep seconds) {
+      promise.success(Pong(ticket))
+    }
+    promise.future
   }
 
-  def sayCorruptedPong(ticket: Int)(implicit executionContext: ExecutionContext) = Future {
+
+  def sayCorruptedPong(ticket: Int)(implicit system: ActorSystem): Future[Pong] = {
+
     val rnd = Random.nextInt(10)
     if (rnd > 5)
       sayPong(ticket)
