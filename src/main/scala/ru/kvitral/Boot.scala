@@ -1,12 +1,18 @@
 package ru.kvitral
 
+import java.lang.management.ManagementFactory
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.after
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import javax.management.{MBeanServer, ObjectName}
+import ru.kvitral.mbeans.{DefaultMBean, Hello, HelloMBean}
+import ru.kvitral.services.PingPong
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -19,9 +25,10 @@ object Boot extends App {
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
   val config = ConfigFactory.load
+  var beans = scala.collection.mutable.Map.empty[String, DefaultMBean]
 
 
-  val route =
+  val pingPongRoute =
     pathPrefix("ping") {
       parameter("ticket".as[Int]) { ticket =>
         complete(PingPong.sayPong(ticket))
@@ -30,17 +37,48 @@ object Boot extends App {
           complete(PingPong.sayCorruptedPong(ticket))
         }
       }
-    } ~
-      path("quick") {
-        complete("this is quick")
-      } ~
-      path("slow") {
+    }
 
+  val quickSlowRoute =
+    path("quick") {
+      complete("this is quick")
+    } ~
+      path("slow") {
         def slowFuture = after(10 second, system.scheduler)(Future.successful("this is slow"))
 
         complete(slowFuture)
       }
 
-  Http().bindAndHandle(route, "127.0.0.1", 8080)
+  val helloBeanRoute =
+    path("hello") {
+      get {
+        val str = beans.get("hello").map {
+          case x: HelloMBean => x.getName
+        }.getOrElse("")
+        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, s"<h1>Say hello to $str</h1>"))
+      } ~
+        post {
+          formFields('name) {
+            name =>
+              beans.get("hello").foreach {
+                case x: HelloMBean => x.setName(name)
+              }
+              complete("ok")
+
+          }
+        }
+    }
+
+  Http().bindAndHandle(pingPongRoute ~ quickSlowRoute ~ helloBeanRoute, "127.0.0.1", 8080)
+  initMbeans
+
+
+  def initMbeans = {
+    val hello = new Hello
+    val mbs: MBeanServer = ManagementFactory.getPlatformMBeanServer
+    val mBeanName: ObjectName = new ObjectName("ru.fintech:type=Hello")
+    mbs.registerMBean(hello, mBeanName)
+    beans += "hello" -> hello
+  }
 
 }

@@ -1,4 +1,4 @@
-package ru.kvitral
+package ru.kvitral.models
 
 import io.circe.Encoder
 import io.circe.generic.semiauto._

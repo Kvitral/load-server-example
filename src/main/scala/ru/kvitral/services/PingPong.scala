@@ -1,6 +1,7 @@
-package ru.kvitral
+package ru.kvitral.services
 
 import akka.actor.ActorSystem
+import ru.kvitral.models.Pong
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
