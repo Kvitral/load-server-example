@@ -12,7 +12,7 @@ import com.typesafe.config.ConfigFactory
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import javax.management.{MBeanServer, ObjectName}
 import ru.kvitral.mbeans.{DefaultMBean, Hello, HelloMBean}
-import ru.kvitral.services.PingPong
+import ru.kvitral.services.{ListAdder, PingPong}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -26,6 +26,9 @@ object Boot extends App {
   implicit val executionContext = system.dispatcher
   val config = ConfigFactory.load
   var beans = scala.collection.mutable.Map.empty[String, DefaultMBean]
+  var leakList = List.empty[Array[Int]]
+  val properListAdder = new ListAdder(10000000)
+  val slowerListAdder = new ListAdder(100000)
 
 
   val pingPongRoute =
@@ -69,7 +72,30 @@ object Boot extends App {
         }
     }
 
-  Http().bindAndHandle(pingPongRoute ~ quickSlowRoute ~ helloBeanRoute, "127.0.0.1", 8080)
+  val leakRoute = path("leak") {
+    get {
+      leakList = leakList :+ new Array[Int](leakList.size * 10000 + 1)
+      complete("bla")
+    }
+  }
+
+  val addersRoute = pathPrefix("adder") {
+    path("proper") {
+      parameter("element".as[Int]) { element =>
+        properListAdder.properAddToList(element)
+        complete("proper")
+      }
+    } ~ path("slower") {
+      parameter("element".as[Int]) { element =>
+        properListAdder.slowerAddToList(element)
+        complete("slower")
+      }
+    }
+  }
+
+  val concatedRoute = pingPongRoute ~ quickSlowRoute ~ helloBeanRoute ~ leakRoute ~ addersRoute
+
+  Http().bindAndHandle(concatedRoute, "127.0.0.1", 8080)
   initMbeans
 
 
